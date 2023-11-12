@@ -30,11 +30,35 @@ impl DynSolEvent {
 
     /// Creates a new event.
     ///
-    /// Checks that the indexed length is less than or equal to 4, and that the
-    /// body is a tuple.
+    /// Checks that the indexed length is less than or equal to 4,
+    /// indexed types are valid (type that has length offset),
+    /// and the body is a tuple.
     pub fn new(topic_0: Option<B256>, indexed: Vec<DynSolType>, body: DynSolType) -> Option<Self> {
-        if indexed.len() > 4 || body.as_tuple().is_none() {
-            return None
+        if indexed.len() > 4
+            || body.as_tuple().is_none()
+            || indexed.iter().all(|ty| {
+                #[cfg(feature = "eip712")]
+                return match ty {
+                    DynSolType::CustomStruct {
+                        name: _,
+                        prop_names: _,
+                        tuple: _,
+                    }
+                    | DynSolType::Array(_)
+                    | DynSolType::FixedArray(_, _)
+                    | DynSolType::Tuple(_) => true,
+                    _ => false,
+                };
+
+                return match ty {
+                    DynSolType::Array(_) | DynSolType::FixedArray(_, _) | DynSolType::Tuple(_) => {
+                        true
+                    }
+                    _ => false,
+                };
+            })
+        {
+            return None;
         }
         Some(Self::new_unchecked(topic_0, indexed, body))
     }
@@ -80,7 +104,7 @@ impl DynSolEvent {
                             return Err(Error::EventSignatureMismatch {
                                 expected,
                                 actual: sig,
-                            })
+                            });
                         }
                     }
                     None => {
@@ -115,7 +139,7 @@ impl DynSolEvent {
                 return Err(Error::TopicLengthMismatch {
                     expected: num_topics,
                     actual: num_topics + remaining,
-                })
+                });
             }
         }
 
